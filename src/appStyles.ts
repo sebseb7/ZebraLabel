@@ -170,6 +170,25 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  networkIpField: {
+    gap: 6,
+  },
+  networkIpLabel: {
+    color: '#6d6a63',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  networkIpInput: {
+    borderColor: '#d7cec0',
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    color: '#191919',
+    fontSize: 16,
+    fontWeight: '600',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   smallButton: {
     borderRadius: 999,
     backgroundColor: '#ffffff',

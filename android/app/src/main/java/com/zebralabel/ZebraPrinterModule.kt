@@ -18,6 +18,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -30,6 +32,8 @@ class ZebraPrinterModule(private val reactContext: ReactApplicationContext) :
     private const val ACTION_USB_PERMISSION = "com.zebralabel.USB_PERMISSION"
     private const val PERMISSION_TIMEOUT_MS = 30000L
     private const val USB_WRITE_TIMEOUT_MS = 10000
+    private const val NETWORK_CONNECT_TIMEOUT_MS = 10000
+    private const val NETWORK_PORT = 9100
     private const val ZEBRA_VENDOR_ID = 0x0A5F
   }
 
@@ -155,6 +159,31 @@ class ZebraPrinterModule(private val reactContext: ReactApplicationContext) :
           connection.releaseInterface(claimedInterface)
         }
         connection?.close()
+      }
+    }.start()
+  }
+
+  @ReactMethod
+  fun printZplToNetwork(zpl: String, host: String, promise: Promise) {
+    Thread {
+      try {
+        val trimmedHost = host.trim()
+        if (trimmedHost.isEmpty()) {
+          throw IllegalArgumentException("Printer IP address is required.")
+        }
+
+        Socket().use { socket ->
+          socket.connect(InetSocketAddress(trimmedHost, NETWORK_PORT), NETWORK_CONNECT_TIMEOUT_MS)
+          socket.soTimeout = NETWORK_CONNECT_TIMEOUT_MS
+          socket.getOutputStream().use { output ->
+            output.write(zpl.toByteArray(StandardCharsets.UTF_8))
+            output.flush()
+          }
+        }
+
+        promise.resolve("Label sent to printer")
+      } catch (error: Exception) {
+        promise.reject("PRINT_FAILED", error.message, error)
       }
     }.start()
   }

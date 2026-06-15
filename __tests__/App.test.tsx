@@ -10,6 +10,7 @@ import App from '../App';
 NativeModules.ZebraPrinter = {
   getUsbPrinters: jest.fn().mockResolvedValue([]),
   printZpl: jest.fn().mockResolvedValue('Label sent to printer'),
+  printZplToNetwork: jest.fn().mockResolvedValue('Label sent to printer'),
 };
 
 test('renders correctly', async () => {
