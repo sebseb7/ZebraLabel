@@ -28,6 +28,7 @@ build/
 .idea
 .gradle
 local.properties
+android/keystore.properties
 *.iml
 *.hprof
 .cxx/
@@ -79,3 +80,4 @@ yarn-error.log
 !.yarn/versions
 
 zebra-label-release.keystore
+keystore-b64.txt

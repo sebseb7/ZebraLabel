@@ -83,6 +83,35 @@ npm run build:apk
 
 Output: `dist/ZebraLabel-<version>-release.apk`
 
+### Local release signing
+
+Copy `android/keystore.properties.example` to `android/keystore.properties` and fill in your passwords. The keystore file lives at the repo root (`zebra-label-release.keystore`, gitignored). Without `keystore.properties`, release builds fall back to the debug keystore.
+
+### GitHub Actions signing
+
+Add these [repository secrets](https://github.com/sebseb7/ZebraLabel/settings/secrets/actions) (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64 of `zebra-label-release.keystore` (see below) |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `zebra-label` |
+| `ANDROID_KEY_PASSWORD` | Key password |
+
+Encode the keystore (Git Bash / Linux / macOS):
+
+```sh
+base64 -w 0 zebra-label-release.keystore
+```
+
+PowerShell:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("zebra-label-release.keystore"))
+```
+
+Paste the single-line output into `ANDROID_KEYSTORE_BASE64`. Release tags and pushes to `main` build a Play Store–compatible signed APK; pull requests still use the debug keystore so forks do not need secrets.
+
 ### Install over Wi‑Fi (adb)
 
 Set up wireless adb once as in [Physical device over Wi‑Fi](#physical-device-over-wi-fi), then install or update the release APK without USB:

@@ -1,0 +1,34 @@
+name: Setup release signing
+description: Decode the release keystore and configure Gradle signing properties for CI.
+
+inputs:
+  keystore-base64:
+    description: Base64-encoded zebra-label-release.keystore
+    required: true
+  keystore-password:
+    description: Keystore password
+    required: true
+  key-alias:
+    description: Key alias (zebra-label)
+    required: true
+  key-password:
+    description: Key password
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Decode release keystore
+      shell: bash
+      run: |
+        echo "${{ inputs.keystore-base64 }}" | base64 --decode > android/app/zebra-label-release.keystore
+
+    - name: Configure Gradle signing properties
+      shell: bash
+      run: |
+        {
+          echo "ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE=zebra-label-release.keystore"
+          echo "ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD=${{ inputs.keystore-password }}"
+          echo "ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS=${{ inputs.key-alias }}"
+          echo "ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD=${{ inputs.key-password }}"
+        } >> "$GITHUB_ENV"
