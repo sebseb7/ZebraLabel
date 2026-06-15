@@ -1,3 +1,5 @@
+[![Build APK](https://github.com/sebseb7/ZebraLabel/actions/workflows/build-apk.yml/badge.svg)](https://github.com/sebseb7/ZebraLabel/actions/workflows/build-apk.yml)
+
 # Zebra Price Label
 
 Android app for printing price labels to a USB-connected **Zebra ZD410** printer.
