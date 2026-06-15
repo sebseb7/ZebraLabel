@@ -30,6 +30,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Cache Android SDK components
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}/ndk/27.1.12297006
+            ${{ env.ANDROID_HOME }}/platforms/android-36
+            ${{ env.ANDROID_HOME }}/build-tools/36.0.0
+          key: ${{ runner.os }}-android-sdk-platforms-android-36-buildtools-36.0.0-ndk-27.1.12297006
+
       - name: Install Android SDK components
         run: |
           sdkmanager \
@@ -37,15 +46,10 @@ jobs:
             "build-tools;36.0.0" \
             "ndk;27.1.12297006"
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Install dependencies
         run: npm ci
