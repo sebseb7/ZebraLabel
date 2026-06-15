@@ -9,6 +9,7 @@
     "start": "react-native start",
     "test": "jest",
     "build:apk": "node scripts/build-apk.js",
+    "release": "node scripts/release.js",
     "generate:icons": "python scripts/generate-app-icon.py"
   },
   "dependencies": {
