@@ -137,3 +137,9 @@ adb -s <device-id> exec-out screencap -p > docs/app-screenshot.png
 | `src/labelOffsetStorage.ts` | Persistent position offsets |
 | `android/.../ZebraPrinterModule.kt` | USB print native module |
 | `scripts/build-apk.js` | Release APK build script |
+
+
+## Misc
+
+keystore creation:
+`keytool -genkeypair -v   -storetype PKCS12   -keystore zebra-label-release.keystore   -alias zebra-label   -keyalg RSA   -keysize 2048   -validity 10000   -dname "CN=Zebra Label, OU=Development, O=Seb Green, L=Dresden, ST=Saxony, C=DE, EMAILADDRESS=sebgreenbus@gmail.com"`
