@@ -58,8 +58,9 @@ jobs:
         run: npm run build:apk
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: zebra-label-release-apk
           path: dist/*.apk
+          archive: false
           if-no-files-found: error
