@@ -125,6 +125,7 @@ export function buildZpl(
   price: string,
   labelSize: LabelSizeId,
   offset: LabelOffset = {xMm: 0, yMm: 0},
+  copies = 1,
 ): string {
   const safePrice = formatPriceLabel(price);
   let zpl: string;
@@ -141,6 +142,10 @@ export function buildZpl(
       break;
     default:
       zpl = buildSmallLabelZpl(safePrice, offset);
+  }
+
+  if (copies > 1) {
+    zpl = zpl.replace('^XZ', `^PQ${copies}\n^XZ`);
   }
 
   return `${zpl.trim()}\r\n`;
