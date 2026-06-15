@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "build:apk": "node scripts/build-apk.js"
+    "build:apk": "node scripts/build-apk.js",
+    "generate:icons": "python scripts/generate-app-icon.py"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",
