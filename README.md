@@ -99,6 +99,18 @@ adb -s <device-ip>:5555 install -r dist/ZebraLabel-<version>-release.apk
 
 Replace `<version>` with the version from `package.json` (e.g. `0.0.1`). If the connection dropped, run `adb connect <device-ip>:5555` again before installing.
 
+## Test CI locally with act
+
+Run the GitHub Actions workflow locally with [act](https://github.com/nektos/act). The `--artifact-server-path` flag is required so `upload-artifact` can store the built APK under `.artifacts/`:
+
+```sh
+act workflow_dispatch -W .github/workflows/build-apk.yml -j build-apk --artifact-server-path .artifacts
+```
+
+On the first run, `Cache not found for input keys: Linux-android-ndk-…` is normal — nothing has been saved yet. The NDK is downloaded by `sdkmanager`, then cached at the **end** of the job.
+
+**Important:** `actions/cache` only saves when the job **succeeds** (`post-if: success()`). If a previous local run failed (for example at `upload-artifact` without `--artifact-server-path`), the NDK cache was never written and the next run will miss again. Gradle caches may still restore because `setup-gradle` saves independently. Once a run completes successfully, subsequent runs should restore the NDK cache.
+
 ## Capture a screenshot for the README
 
 With the app open on a connected device:
