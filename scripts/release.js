@@ -5,13 +5,11 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const buildGradlePath = path.join(projectRoot, 'android', 'app', 'build.gradle');
-const isWindows = process.platform === 'win32';
 
 function runGit(args, {allowFailure = false} = {}) {
   const result = spawnSync('git', args, {
     cwd: projectRoot,
     encoding: 'utf8',
-    shell: isWindows,
   });
 
   if (result.error) {
