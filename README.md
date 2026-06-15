@@ -80,6 +80,23 @@ npm run build:apk
 
 Output: `dist/ZebraLabel-<version>-release.apk`
 
+### Install over Wi‑Fi (adb)
+
+Set up wireless adb once as in [Physical device over Wi‑Fi](#physical-device-over-wi-fi), then install or update the release APK without USB:
+
+```sh
+adb connect <device-ip>:5555
+adb install -r dist/ZebraLabel-<version>-release.apk
+```
+
+`-r` replaces an existing install. If adb lists multiple devices, target the tablet explicitly:
+
+```sh
+adb -s <device-ip>:5555 install -r dist/ZebraLabel-<version>-release.apk
+```
+
+Replace `<version>` with the version from `package.json` (e.g. `0.0.1`). If the connection dropped, run `adb connect <device-ip>:5555` again before installing.
+
 ## Capture a screenshot for the README
 
 With the app open on a connected device:
