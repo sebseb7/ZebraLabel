@@ -1,4 +1,5 @@
 [![Build APK](https://github.com/sebseb7/ZebraLabel/actions/workflows/build-apk.yml/badge.svg)](https://github.com/sebseb7/ZebraLabel/actions/workflows/build-apk.yml)
+[![Latest release](https://img.shields.io/github/v/release/sebseb7/ZebraLabel)](https://github.com/sebseb7/ZebraLabel/releases/latest)
 
 # Zebra Price Label
 
