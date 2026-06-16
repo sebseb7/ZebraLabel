@@ -9,7 +9,9 @@ import React, {
 } from 'react';
 import {ActivityIndicator, Pressable, Text, View} from 'react-native';
 import {styles} from '../appStyles';
-import {formatPrice, MAX_DIGITS} from '../appUtils';
+import {formatPrice, barcodeValueToDigits, MAX_DIGITS} from '../appUtils';
+import {isBarcodeScanCanceled, scanBarcode} from '../barcodeScanner';
+import {BarcodeIcon} from './BarcodeIcon';
 import {Key} from './Key';
 
 const DIGIT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
@@ -23,6 +25,8 @@ type PriceInputContextValue = {
   appendDigit: (digit: string) => void;
   backspace: () => void;
   clear: () => void;
+  setPriceFromScan: (rawValue: string) => void;
+  showStatus: (status: string) => void;
   handlePrint: () => void;
   handlePrintMany: () => void;
 };
@@ -100,6 +104,24 @@ export function PriceInputProvider({
     setDigits('');
   }, [exitPrintManyMode, onStatus, printManyMode]);
 
+  const setPriceFromScan = useCallback(
+    (rawValue: string) => {
+      if (printManyMode) {
+        exitPrintManyMode();
+      }
+
+      const scannedDigits = barcodeValueToDigits(rawValue);
+      if (!scannedDigits) {
+        onStatus('No price found in barcode');
+        return;
+      }
+
+      setDigits(scannedDigits);
+      onStatus(`Scanned price: ${formatPrice(scannedDigits)}`);
+    },
+    [exitPrintManyMode, onStatus, printManyMode],
+  );
+
   const handlePrint = useCallback(async () => {
     if (printManyMode) {
       exitPrintManyMode();
@@ -136,6 +158,8 @@ export function PriceInputProvider({
       appendDigit,
       backspace,
       clear,
+      setPriceFromScan,
+      showStatus: onStatus,
       handlePrint,
       handlePrintMany,
     }),
@@ -143,6 +167,8 @@ export function PriceInputProvider({
       appendDigit,
       backspace,
       clear,
+      setPriceFromScan,
+      onStatus,
       handlePrint,
       handlePrintMany,
       isBusy,
@@ -156,14 +182,53 @@ export function PriceInputProvider({
 }
 
 export const PriceDisplay = memo(function PriceDisplay() {
-  const {price} = usePriceInput();
+  const {price, isBusy, setPriceFromScan, showStatus} = usePriceInput();
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleScanPress = useCallback(async () => {
+    if (isBusy || isScanning) {
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const value = await scanBarcode();
+      if (value) {
+        setPriceFromScan(value);
+      }
+    } catch (error) {
+      if (!isBarcodeScanCanceled(error)) {
+        showStatus(error instanceof Error ? error.message : 'Barcode scan failed');
+      }
+    } finally {
+      setIsScanning(false);
+    }
+  }, [isBusy, isScanning, setPriceFromScan, showStatus]);
 
   return (
     <View style={styles.section}>
       <Text style={styles.sectionCaption}>Price</Text>
-      <View style={styles.priceField}>
-        <Text style={styles.priceText}>{price}</Text>
-        <Text style={styles.currencyText}>EUR</Text>
+      <View style={styles.priceFieldRow}>
+        <View style={styles.priceField}>
+          <Text style={styles.priceText}>{price}</Text>
+          <Text style={styles.currencyText}>EUR</Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Scan barcode for price"
+          accessibilityRole="button"
+          disabled={isBusy || isScanning}
+          onPress={handleScanPress}
+          style={({pressed}) => [
+            styles.barcodeScanButton,
+            pressed && styles.pressed,
+            (isBusy || isScanning) && styles.disabled,
+          ]}>
+          {isScanning ? (
+            <ActivityIndicator color="#191919" />
+          ) : (
+            <BarcodeIcon />
+          )}
+        </Pressable>
       </View>
     </View>
   );

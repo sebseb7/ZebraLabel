@@ -7,7 +7,10 @@ import com.facebook.react.uimanager.ViewManager
 
 class ZebraPrinterPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-    listOf(ZebraPrinterModule(reactContext))
+    listOf(
+      ZebraPrinterModule(reactContext),
+      BarcodeScannerModule(reactContext),
+    )
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
     emptyList()

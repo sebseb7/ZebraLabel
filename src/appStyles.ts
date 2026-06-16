@@ -30,8 +30,14 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  priceFieldRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    gap: 10,
+  },
   priceField: {
     alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderColor: '#d7cec0',
@@ -40,6 +46,26 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     minHeight: 96,
     paddingHorizontal: 20,
+  },
+  barcodeScanButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderColor: '#d7cec0',
+    borderRadius: 18,
+    borderWidth: 2,
+    backgroundColor: '#ffffff',
+    minHeight: 96,
+    width: 96,
+  },
+  barcodeIcon: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 40,
+  },
+  barcodeBar: {
+    backgroundColor: '#191919',
+    borderRadius: 1,
+    height: 40,
   },
   priceText: {
     color: '#000000',
