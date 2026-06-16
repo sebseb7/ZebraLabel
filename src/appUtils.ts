@@ -11,6 +11,29 @@ export function formatPrice(digits: string) {
   return `${euros},${cents}`;
 }
 
+export function digitsToDecimalPrice(digits: string): string {
+  const cleanDigits = digits.replace(/\D/g, '');
+  if (!cleanDigits) {
+    return '';
+  }
+
+  const cents = cleanDigits.slice(-2).padStart(2, '0');
+  const euros = cleanDigits.slice(0, -2).replace(/^0+(?=\d)/, '') || '0';
+  return `${euros}.${cents}`;
+}
+
+export function decimalPriceToDigits(price: string): string {
+  const normalized = price.trim().replace(/\s/g, '');
+  const decimalMatch = normalized.match(/^(\d+)[.,](\d{1,2})$/);
+
+  if (decimalMatch) {
+    const digits = `${decimalMatch[1]}${decimalMatch[2].padEnd(2, '0')}`;
+    return digits.replace(/^0+(?=\d)/, '').slice(0, MAX_DIGITS);
+  }
+
+  return normalized.replace(/\D/g, '').slice(0, MAX_DIGITS);
+}
+
 export function barcodeValueToDigits(raw: string): string {
   const normalized = raw.trim().replace(/\s/g, '');
   const decimalMatch = normalized.match(/^[^\d]*(\d+)[.,](\d{1,2})[^\d]*$/);

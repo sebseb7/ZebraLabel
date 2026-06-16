@@ -18,7 +18,13 @@ import {
   savePrinterSettings,
 } from '../printerSettingsStorage';
 import {styles} from '../appStyles';
-import {clamp, errorMessage, ZERO_OFFSET} from '../appUtils';
+import {
+  DEFAULT_PRICE_API_SETTINGS,
+  loadPriceApiSettings,
+  savePriceApiSettings,
+} from '../priceApiSettingsStorage';
+import {savePriceByBarcode} from '../priceApi';
+import {clamp, digitsToDecimalPrice, errorMessage, ZERO_OFFSET} from '../appUtils';
 import {LABEL_SIZES} from '../labelSizes';
 import {
   sendZpl,
@@ -28,6 +34,7 @@ import {
 } from '../zebraPrinter';
 import {
   AppHeader,
+  ApiSettingsModal,
   LabelSizeSection,
   PositionSection,
   PrinterSection,
@@ -36,6 +43,7 @@ import {
   PriceDisplay,
   PriceInputProvider,
   PriceKeypad,
+  type PrintMeta,
 } from './PriceInputPanel';
 
 export function AppContent() {
@@ -53,6 +61,11 @@ export function AppContent() {
     DEFAULT_PRINTER_SETTINGS.networkIp,
   );
   const printerSettingsHydratedRef = useRef(false);
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [priceApiBaseUrl, setPriceApiBaseUrl] = useState(
+    DEFAULT_PRICE_API_SETTINGS.baseUrl,
+  );
+  const priceApiSettingsHydratedRef = useRef(false);
   const [status, setStatus] = useState('Ready');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -167,52 +180,131 @@ export function AppContent() {
   }, [networkPrinterIp, printerConnection]);
 
   useEffect(() => {
-    refreshPrinters();
-  }, [refreshPrinters]);
+    let cancelled = false;
+
+    loadPriceApiSettings().then(storedSettings => {
+      if (cancelled) {
+        return;
+      }
+
+      setPriceApiBaseUrl(storedSettings.baseUrl);
+      priceApiSettingsHydratedRef.current = true;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!priceApiSettingsHydratedRef.current) {
+      return;
+    }
+
+    savePriceApiSettings({baseUrl: priceApiBaseUrl});
+  }, [priceApiBaseUrl]);
+
+  const postPriceToApi = useCallback(
+    async (meta: PrintMeta | undefined): Promise<string | null> => {
+      if (
+        !meta?.postPriceToApi ||
+        !meta.barcode ||
+        !meta.priceDigits ||
+        !priceApiBaseUrl.trim()
+      ) {
+        return null;
+      }
+
+      try {
+        const decimalPrice = digitsToDecimalPrice(meta.priceDigits);
+        await savePriceByBarcode(priceApiBaseUrl, meta.barcode, decimalPrice);
+        return `saved price for ${meta.barcode}`;
+      } catch (error) {
+        return `API save failed: ${errorMessage(error)}`;
+      }
+    },
+    [priceApiBaseUrl],
+  );
 
   const handlePrint = useCallback(
-    async (price: string) => {
+    async (price: string, meta?: PrintMeta) => {
       setIsBusy(true);
+
+      const apiNote = await postPriceToApi(meta);
       setStatus(`Printing ${labelSize.title} ${labelSize.subtitle} label...`);
 
       try {
         const zpl = buildZpl(price, selectedLabelSize, currentOffset);
         await sendZpl(zpl, printerConnection, networkPrinterIp);
-        setStatus(`Printed ${price} on ${labelDescription(selectedLabelSize)}`);
+        const labelText = labelDescription(selectedLabelSize);
+        setStatus(
+          apiNote
+            ? `Printed ${price} on ${labelText} · ${apiNote}`
+            : `Printed ${price} on ${labelText}`,
+        );
       } catch (error) {
         const message = errorMessage(error);
-        setStatus(message);
+        setStatus(apiNote ? `${message} · ${apiNote}` : message);
         Alert.alert('Print failed', message);
       } finally {
         setIsBusy(false);
         refreshPrinters();
       }
     },
-    [currentOffset, labelSize.subtitle, labelSize.title, networkPrinterIp, printerConnection, refreshPrinters, selectedLabelSize],
+    [
+      currentOffset,
+      labelSize.subtitle,
+      labelSize.title,
+      networkPrinterIp,
+      postPriceToApi,
+      printerConnection,
+      refreshPrinters,
+      selectedLabelSize,
+    ],
   );
 
   const handlePrintMany = useCallback(
-    async (price: string, count: number) => {
+    async (price: string, count: number, meta?: PrintMeta) => {
       setIsBusy(true);
+
+      const apiNote = await postPriceToApi(meta);
       setStatus(`Printing ${count}× ${labelSize.title} ${labelSize.subtitle} labels...`);
 
       try {
         const zpl = buildZpl(price, selectedLabelSize, currentOffset, count);
         await sendZpl(zpl, printerConnection, networkPrinterIp);
-        setStatus(`Printed ${count}× ${price} on ${labelDescription(selectedLabelSize)}`);
+        const labelText = labelDescription(selectedLabelSize);
+        setStatus(
+          apiNote
+            ? `Printed ${count}× ${price} on ${labelText} · ${apiNote}`
+            : `Printed ${count}× ${price} on ${labelText}`,
+        );
         return true;
       } catch (error) {
         const message = errorMessage(error);
-        setStatus(message);
+        setStatus(apiNote ? `${message} · ${apiNote}` : message);
         Alert.alert('Print failed', message);
-        return false;
+        return apiNote?.startsWith('saved') ?? false;
       } finally {
         setIsBusy(false);
         refreshPrinters();
       }
     },
-    [currentOffset, labelSize.subtitle, labelSize.title, networkPrinterIp, printerConnection, refreshPrinters, selectedLabelSize],
+    [
+      currentOffset,
+      labelSize.subtitle,
+      labelSize.title,
+      networkPrinterIp,
+      postPriceToApi,
+      printerConnection,
+      refreshPrinters,
+      selectedLabelSize,
+    ],
   );
+
+  useEffect(() => {
+    refreshPrinters();
+  }, [refreshPrinters]);
 
   const togglePositionAdjust = useCallback(() => {
     setShowPositionAdjust(current => !current);
@@ -230,6 +322,7 @@ export function AppContent() {
       <StatusBar barStyle="dark-content" backgroundColor="#f7f3eb" />
       <PriceInputProvider
         isBusy={isBusy}
+        priceApiBaseUrl={priceApiBaseUrl}
         onPrint={handlePrint}
         onPrintMany={handlePrintMany}
         onStatus={setStatus}>
@@ -241,7 +334,7 @@ export function AppContent() {
               paddingBottom: Math.max(insets.bottom, 24) + 24,
             },
           ]}>
-          <AppHeader />
+          <AppHeader onOpenSettings={() => setShowApiSettings(true)} />
           <PriceDisplay />
           <LabelSizeSection
             selectedLabelSize={selectedLabelSize}
@@ -270,6 +363,12 @@ export function AppContent() {
           <PriceKeypad />
         </ScrollView>
       </PriceInputProvider>
+      <ApiSettingsModal
+        visible={showApiSettings}
+        apiBaseUrl={priceApiBaseUrl}
+        onApiBaseUrlChange={setPriceApiBaseUrl}
+        onClose={() => setShowApiSettings(false)}
+      />
     </View>
   );
 }

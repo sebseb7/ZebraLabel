@@ -9,23 +9,37 @@ import React, {
 } from 'react';
 import {ActivityIndicator, Pressable, Text, View} from 'react-native';
 import {styles} from '../appStyles';
-import {formatPrice, barcodeValueToDigits, MAX_DIGITS} from '../appUtils';
+import {
+  barcodeValueToDigits,
+  decimalPriceToDigits,
+  formatPrice,
+  MAX_DIGITS,
+} from '../appUtils';
 import {isBarcodeScanCanceled, scanBarcode} from '../barcodeScanner';
+import {fetchPriceByBarcode, isPriceApiConfigured} from '../priceApi';
 import {BarcodeIcon} from './BarcodeIcon';
 import {Key} from './Key';
 
 const DIGIT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 const MAX_PRINT_COUNT_DIGITS = 4;
 
+export type PrintMeta = {
+  barcode?: string;
+  postPriceToApi?: boolean;
+  priceDigits?: string;
+};
+
 type PriceInputContextValue = {
   price: string;
+  pendingBarcode: string | null;
   printManyMode: boolean;
   printCount: string;
   isBusy: boolean;
+  isResolvingBarcode: boolean;
   appendDigit: (digit: string) => void;
   backspace: () => void;
   clear: () => void;
-  setPriceFromScan: (rawValue: string) => void;
+  resolveBarcodeScan: (rawValue: string) => Promise<void>;
   showStatus: (status: string) => void;
   handlePrint: () => void;
   handlePrintMany: () => void;
@@ -43,29 +57,55 @@ function usePriceInput() {
 
 type PriceInputProviderProps = {
   isBusy: boolean;
-  onPrint: (price: string) => Promise<void>;
-  onPrintMany: (price: string, count: number) => Promise<boolean>;
+  priceApiBaseUrl: string;
+  onPrint: (price: string, meta?: PrintMeta) => Promise<void>;
+  onPrintMany: (price: string, count: number, meta?: PrintMeta) => Promise<boolean>;
   onStatus: (status: string) => void;
   children: ReactNode;
 };
 
 export function PriceInputProvider({
   isBusy,
+  priceApiBaseUrl,
   onPrint,
   onPrintMany,
   onStatus,
   children,
 }: PriceInputProviderProps) {
   const [digits, setDigits] = useState('');
+  const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
+  const [needsPricePost, setNeedsPricePost] = useState(false);
+  const [isResolvingBarcode, setIsResolvingBarcode] = useState(false);
   const [printManyMode, setPrintManyMode] = useState(false);
   const [printCount, setPrintCount] = useState('');
 
   const price = useMemo(() => formatPrice(digits), [digits]);
 
+  const resetBarcodeState = useCallback(() => {
+    setPendingBarcode(null);
+    setNeedsPricePost(false);
+  }, []);
+
   const exitPrintManyMode = useCallback(() => {
     setPrintManyMode(false);
     setPrintCount('');
   }, []);
+
+  const buildPrintMeta = useCallback((): PrintMeta | undefined => {
+    if (!pendingBarcode || !digits || !isPriceApiConfigured(priceApiBaseUrl)) {
+      return undefined;
+    }
+
+    if (!needsPricePost) {
+      return undefined;
+    }
+
+    return {
+      barcode: pendingBarcode,
+      postPriceToApi: true,
+      priceDigits: digits,
+    };
+  }, [digits, needsPricePost, pendingBarcode, priceApiBaseUrl]);
 
   const appendDigit = useCallback(
     (digit: string) => {
@@ -102,15 +142,72 @@ export function PriceInputProvider({
     }
 
     setDigits('');
-  }, [exitPrintManyMode, onStatus, printManyMode]);
+    resetBarcodeState();
+  }, [exitPrintManyMode, onStatus, printManyMode, resetBarcodeState]);
 
-  const setPriceFromScan = useCallback(
-    (rawValue: string) => {
+  const resolveBarcodeScan = useCallback(
+    async (rawValue: string) => {
       if (printManyMode) {
         exitPrintManyMode();
       }
 
-      const scannedDigits = barcodeValueToDigits(rawValue);
+      const barcode = rawValue.trim();
+      if (!barcode) {
+        onStatus('Barcode had no readable value');
+        return;
+      }
+
+      if (isPriceApiConfigured(priceApiBaseUrl)) {
+        if (
+          pendingBarcode &&
+          pendingBarcode !== barcode &&
+          needsPricePost &&
+          digits
+        ) {
+          onStatus(`Print price for ${pendingBarcode} before scanning another barcode`);
+          return;
+        }
+
+        if (pendingBarcode === barcode && needsPricePost && digits) {
+          onStatus(`Price ready for ${barcode} — tap Print to save`);
+          return;
+        }
+
+        setIsResolvingBarcode(true);
+        setPendingBarcode(barcode);
+        setDigits('');
+        setNeedsPricePost(false);
+        onStatus(`Looking up ${barcode}...`);
+
+        try {
+          const apiPrice = await fetchPriceByBarcode(priceApiBaseUrl, barcode);
+          if (apiPrice) {
+            const scannedDigits = decimalPriceToDigits(apiPrice);
+            if (scannedDigits) {
+              setDigits(scannedDigits);
+              setNeedsPricePost(false);
+              onStatus(`Scanned ${barcode}: ${formatPrice(scannedDigits)}`);
+              return;
+            }
+          }
+
+          setNeedsPricePost(true);
+          onStatus(`No price for ${barcode} — enter price and print`);
+        } catch (error) {
+          setNeedsPricePost(true);
+          onStatus(
+            error instanceof Error
+              ? `${error.message} — enter price manually`
+              : 'API lookup failed — enter price manually',
+          );
+        } finally {
+          setIsResolvingBarcode(false);
+        }
+        return;
+      }
+
+      resetBarcodeState();
+      const scannedDigits = barcodeValueToDigits(barcode);
       if (!scannedDigits) {
         onStatus('No price found in barcode');
         return;
@@ -119,7 +216,7 @@ export function PriceInputProvider({
       setDigits(scannedDigits);
       onStatus(`Scanned price: ${formatPrice(scannedDigits)}`);
     },
-    [exitPrintManyMode, onStatus, printManyMode],
+    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApiBaseUrl, printManyMode, resetBarcodeState],
   );
 
   const handlePrint = useCallback(async () => {
@@ -127,8 +224,31 @@ export function PriceInputProvider({
       exitPrintManyMode();
     }
 
-    await onPrint(price);
-  }, [exitPrintManyMode, onPrint, price, printManyMode]);
+    if (isResolvingBarcode) {
+      onStatus('Wait for barcode lookup to finish');
+      return;
+    }
+
+    if (!digits) {
+      onStatus('Enter a price first');
+      return;
+    }
+
+    const meta = buildPrintMeta();
+    await onPrint(price, meta);
+    resetBarcodeState();
+    setDigits('');
+  }, [
+    buildPrintMeta,
+    digits,
+    exitPrintManyMode,
+    isResolvingBarcode,
+    onPrint,
+    onStatus,
+    price,
+    printManyMode,
+    resetBarcodeState,
+  ]);
 
   const handlePrintMany = useCallback(async () => {
     if (!printManyMode) {
@@ -144,21 +264,47 @@ export function PriceInputProvider({
       return;
     }
 
-    if (await onPrintMany(price, count)) {
-      exitPrintManyMode();
+    if (!digits) {
+      onStatus('Enter a price first');
+      return;
     }
-  }, [exitPrintManyMode, onPrintMany, onStatus, price, printCount, printManyMode]);
+
+    if (isResolvingBarcode) {
+      onStatus('Wait for barcode lookup to finish');
+      return;
+    }
+
+    const meta = buildPrintMeta();
+    if (await onPrintMany(price, count, meta)) {
+      exitPrintManyMode();
+      resetBarcodeState();
+      setDigits('');
+    }
+  }, [
+    buildPrintMeta,
+    digits,
+    exitPrintManyMode,
+    isResolvingBarcode,
+    onPrintMany,
+    onStatus,
+    price,
+    printCount,
+    printManyMode,
+    resetBarcodeState,
+  ]);
 
   const value = useMemo(
     () => ({
       price,
+      pendingBarcode,
       printManyMode,
       printCount,
       isBusy,
+      isResolvingBarcode,
       appendDigit,
       backspace,
       clear,
-      setPriceFromScan,
+      resolveBarcodeScan,
       showStatus: onStatus,
       handlePrint,
       handlePrintMany,
@@ -167,11 +313,13 @@ export function PriceInputProvider({
       appendDigit,
       backspace,
       clear,
-      setPriceFromScan,
+      resolveBarcodeScan,
       onStatus,
       handlePrint,
       handlePrintMany,
       isBusy,
+      isResolvingBarcode,
+      pendingBarcode,
       price,
       printCount,
       printManyMode,
@@ -182,7 +330,7 @@ export function PriceInputProvider({
 }
 
 export const PriceDisplay = memo(function PriceDisplay() {
-  const {price, isBusy, setPriceFromScan, showStatus} = usePriceInput();
+  const {price, pendingBarcode, isBusy, resolveBarcodeScan, showStatus} = usePriceInput();
   const [isScanning, setIsScanning] = useState(false);
 
   const handleScanPress = useCallback(async () => {
@@ -194,7 +342,7 @@ export const PriceDisplay = memo(function PriceDisplay() {
     try {
       const value = await scanBarcode();
       if (value) {
-        setPriceFromScan(value);
+        await resolveBarcodeScan(value);
       }
     } catch (error) {
       if (!isBarcodeScanCanceled(error)) {
@@ -203,7 +351,7 @@ export const PriceDisplay = memo(function PriceDisplay() {
     } finally {
       setIsScanning(false);
     }
-  }, [isBusy, isScanning, setPriceFromScan, showStatus]);
+  }, [isBusy, isScanning, resolveBarcodeScan, showStatus]);
 
   return (
     <View style={styles.section}>
@@ -230,6 +378,9 @@ export const PriceDisplay = memo(function PriceDisplay() {
           )}
         </Pressable>
       </View>
+      {pendingBarcode ? (
+        <Text style={styles.barcodeHint}>Barcode: {pendingBarcode}</Text>
+      ) : null}
     </View>
   );
 });
@@ -250,12 +401,15 @@ export const PriceKeypad = memo(function PriceKeypad() {
     printManyMode,
     printCount,
     isBusy,
+    isResolvingBarcode,
     appendDigit,
     backspace,
     clear,
     handlePrint,
     handlePrintMany,
   } = usePriceInput();
+
+  const printDisabled = isBusy || isResolvingBarcode;
 
   return (
     <>
@@ -271,11 +425,11 @@ export const PriceKeypad = memo(function PriceKeypad() {
       <View style={styles.printButtonRow}>
         <Pressable
           onPress={handlePrint}
-          disabled={isBusy}
+          disabled={printDisabled}
           style={({pressed}) => [
             styles.printButton,
             pressed && styles.pressed,
-            isBusy && styles.disabled,
+            printDisabled && styles.disabled,
           ]}>
           {isBusy && !printManyMode ? (
             <ActivityIndicator color="#ffffff" />
@@ -285,12 +439,12 @@ export const PriceKeypad = memo(function PriceKeypad() {
         </Pressable>
         <Pressable
           onPress={handlePrintMany}
-          disabled={isBusy}
+          disabled={printDisabled}
           style={({pressed}) => [
             styles.printButton,
             printManyMode && styles.printManyButtonActive,
             pressed && styles.pressed,
-            isBusy && styles.disabled,
+            printDisabled && styles.disabled,
           ]}>
           {isBusy && printManyMode ? (
             <ActivityIndicator color="#ffffff" />

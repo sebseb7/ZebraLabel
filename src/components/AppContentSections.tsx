@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {Pressable, Text, TextInput, View} from 'react-native';
+import {Modal, Pressable, Text, TextInput, View} from 'react-native';
 import {LABEL_OFFSET_STEP_MM, type LabelOffset, type LabelSizeId} from '../buildZpl';
 import {styles} from '../appStyles';
 import {formatOffsetMm, hasActiveOffset} from '../appUtils';
@@ -7,13 +7,80 @@ import {LABEL_SIZES} from '../labelSizes';
 import {type PrinterConnection, type ZebraUsbPrinter} from '../zebraPrinter';
 import {OffsetButton} from './OffsetButton';
 
-export class AppHeader extends Component {
+export class AppHeader extends Component<{
+  onOpenSettings: () => void;
+}> {
   render() {
+    const {onOpenSettings} = this.props;
+
     return (
-      <View style={styles.header}>
-        <Text style={styles.title}>Zebra Price Label</Text>
-        <Text style={styles.subtitle}>Zebra ZD410</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Zebra Price Label</Text>
+          <Text style={styles.subtitle}>Zebra ZD410</Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Open settings"
+          accessibilityRole="button"
+          onPress={onOpenSettings}
+          style={({pressed}) => [styles.settingsButton, pressed && styles.pressed]}>
+          <Text style={styles.settingsIconText}>⚙</Text>
+        </Pressable>
       </View>
+    );
+  }
+}
+
+type ApiSettingsModalProps = {
+  visible: boolean;
+  apiBaseUrl: string;
+  onApiBaseUrlChange: (url: string) => void;
+  onClose: () => void;
+};
+
+export class ApiSettingsModal extends Component<ApiSettingsModalProps> {
+  render() {
+    const {visible, apiBaseUrl, onApiBaseUrlChange, onClose} = this.props;
+
+    return (
+      <Modal
+        animationType="fade"
+        onRequestClose={onClose}
+        transparent
+        visible={visible}>
+        <Pressable onPress={onClose} style={styles.modalBackdrop}>
+          <Pressable onPress={() => undefined} style={styles.modalCard}>
+            <View style={styles.offsetHeader}>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <Pressable
+                onPress={onClose}
+                style={({pressed}) => [styles.smallButton, pressed && styles.pressed]}>
+                <Text style={styles.smallButtonText}>Close</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.modalHint}>
+              Barcode price API base URL. Scanned barcodes are looked up here; unknown
+              prices are saved after you print.
+            </Text>
+            <View style={styles.networkIpField}>
+              <Text style={styles.networkIpLabel}>API base URL</Text>
+              <TextInput
+                value={apiBaseUrl}
+                onChangeText={onApiBaseUrlChange}
+                placeholder="http://192.168.1.10:3456"
+                placeholderTextColor="#9a9489"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={styles.networkIpInput}
+              />
+            </View>
+            <Text style={styles.modalExample}>
+              Endpoints: GET/PUT /prices/&#123;barcode&#125; with &#123;"price":"4.99"&#125;
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     );
   }
 }

@@ -1,0 +1,9 @@
+{
+  "name": "zebralabel-price-api-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo barcode-to-price API for ZebraLabel",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

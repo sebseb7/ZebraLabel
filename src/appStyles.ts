@@ -10,7 +10,61 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   header: {
+    flex: 1,
     gap: 4,
+  },
+  headerRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  settingsButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderColor: '#d7cec0',
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  settingsIconText: {
+    color: '#191919',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(25, 25, 25, 0.45)',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    gap: 12,
+    borderRadius: 18,
+    backgroundColor: '#f7f3eb',
+    padding: 18,
+  },
+  modalTitle: {
+    color: '#191919',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  modalHint: {
+    color: '#6d6a63',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalExample: {
+    color: '#6d6a63',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  barcodeHint: {
+    color: '#4e4a43',
+    fontSize: 14,
+    fontWeight: '600',
   },
   title: {
     color: '#191919',
