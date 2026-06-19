@@ -1,0 +1,9 @@
+{
+  "android": {
+    "packageName": "com.zebralabel",
+    "buildType": "Release",
+    "quiet": true
+  },
+  "debug": false,
+  "report": true
+}

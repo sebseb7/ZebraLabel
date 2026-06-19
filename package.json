@@ -8,10 +8,15 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
+    "owl:build:android": "owl build --platform android",
+    "owl:test:android": "node scripts/owl-test-android.js",
+    "owl:test:android:update": "node scripts/owl-test-android.js --update",
+    "owl:screenshot:readme": "node -e \"require('fs').copyFileSync('.owl/baseline/android/home-screen.png','docs/app-screenshot.png')\"",
     "build:apk": "node scripts/build-apk.js",
     "install:apk": "node scripts/install-apk-all.js",
     "release": "node scripts/release.js",
-    "generate:icons": "python scripts/generate-app-icon.py"
+    "generate:icons": "python scripts/generate-app-icon.py",
+    "postinstall": "node scripts/patch-react-native-owl.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",
@@ -38,6 +43,7 @@
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",
+    "react-native-owl": "^1.5.0",
     "react-test-renderer": "19.2.3",
     "typescript": "^5.8.3"
   },

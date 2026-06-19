@@ -22,7 +22,9 @@ export class AppHeader extends Component<{
     return (
       <View style={styles.headerRow}>
         <View style={styles.header}>
-          <Text style={styles.title}>Zebra Price Label</Text>
+          <Text style={styles.title} testID="app-title">
+            Zebra Price Label
+          </Text>
           <Text style={styles.subtitle}>Zebra ZD410</Text>
         </View>
         <Pressable

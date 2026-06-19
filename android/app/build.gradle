@@ -7,6 +7,11 @@ apply plugin: "com.facebook.react"
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
+    def owlEntryFile = System.getenv("ENTRY_FILE")
+    if (owlEntryFile != null && !owlEntryFile.isBlank()) {
+        entryFile.set(root.file("owl.entry.js"))
+    }
+
     /* Folders */
     //   The root of your project, i.e. where "package.json" lives. Default is '../..'
     // root = file("../../")
