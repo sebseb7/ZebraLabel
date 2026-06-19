@@ -74,3 +74,22 @@ export function errorMessage(error: unknown) {
 
   return String(error);
 }
+
+export function sameUsbPrinters<T extends {
+  name: string;
+  vendorId: number;
+  productId: number;
+  hasPermission: boolean;
+}>(left: T[], right: T[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every(
+    (printer, index) =>
+      printer.name === right[index].name &&
+      printer.vendorId === right[index].vendorId &&
+      printer.productId === right[index].productId &&
+      printer.hasPermission === right[index].hasPermission,
+  );
+}

@@ -6,6 +6,9 @@ import {formatOffsetMm, hasActiveOffset} from '../appUtils';
 import {isBarcodeScanCanceled, scanQrCode} from '../barcodeScanner';
 import {LABEL_SIZES} from '../labelSizes';
 import {parsePriceApiQrPayload} from '../priceApi';
+import {type PrinterAgentStatus} from '../printerAgent';
+import {type ApiPrinterMode} from '../printerMode';
+import {type RemotePrinter} from '../printerApi';
 import {type PrinterConnection, type ZebraUsbPrinter} from '../zebraPrinter';
 import {BarcodeIcon} from './BarcodeIcon';
 import {OffsetButton} from './OffsetButton';
@@ -114,7 +117,8 @@ export class ApiSettingsModal extends Component<
             </View>
             <Text style={styles.modalHint}>
               Scan the API token QR from the web UI, or enter URL and token manually.
-              Scanned barcodes are looked up here; unknown prices are saved after you print.
+              With a USB printer this device acts as a print agent; otherwise it prints
+              through remote printers on the server.
             </Text>
             <Pressable
               accessibilityLabel="Scan API setup QR code"
@@ -162,7 +166,7 @@ export class ApiSettingsModal extends Component<
               />
             </View>
             <Text style={styles.modalExample}>
-              Endpoints: GET/PUT /api/v1/price with Bearer token
+              Price: GET/PUT /api/v1/price · Printers: /api/v1/printer/*
             </Text>
           </Pressable>
         </Pressable>
@@ -307,10 +311,39 @@ const PRINTER_CONNECTIONS: {id: PrinterConnection; title: string; subtitle: stri
 ];
 
 function printerSummaryHint(
+  apiMode: ApiPrinterMode,
+  agentStatus: PrinterAgentStatus,
   connection: PrinterConnection,
   networkIp: string,
   printers: ZebraUsbPrinter[],
+  remotePrinters: RemotePrinter[],
+  selectedRemotePrinterId: string,
 ): string {
+  if (apiMode === 'agent') {
+    const printer = printers[0];
+    const permissionNote =
+      printer && !printer.hasPermission ? ' · permission needed' : '';
+    if (agentStatus.state === 'connected') {
+      return `Agent · ${agentStatus.agentName}${permissionNote}`;
+    }
+    return (agentStatus.message || 'Agent · connecting…') + permissionNote;
+  }
+
+  if (apiMode === 'client') {
+    if (remotePrinters.length === 0) {
+      return 'Remote · no printer online';
+    }
+
+    const selected =
+      remotePrinters.find(printer => printer.id === selectedRemotePrinterId) ??
+      remotePrinters[0];
+    if (remotePrinters.length === 1) {
+      return `Remote · ${selected.name}`;
+    }
+
+    return `Remote · ${remotePrinters.length} printers · ${selected.name}`;
+  }
+
   if (connection === 'network') {
     const ip = networkIp.trim();
     return ip ? `Network · ${ip}` : 'Network · IP not set';
@@ -324,32 +357,44 @@ function printerSummaryHint(
 }
 
 type PrinterSectionProps = {
+  apiMode: ApiPrinterMode;
+  agentStatus: PrinterAgentStatus;
   showPrinterSettings: boolean;
   connection: PrinterConnection;
   networkIp: string;
   status: string;
   printers: ZebraUsbPrinter[];
+  remotePrinters: RemotePrinter[];
+  selectedRemotePrinterId: string;
   isBusy: boolean;
   onToggleSettings: () => void;
   onConnectionChange: (connection: PrinterConnection) => void;
   onNetworkIpChange: (ip: string) => void;
+  onSelectRemotePrinter: (printerId: string) => void;
   onRefresh: () => void;
 };
 
 export class PrinterSection extends Component<PrinterSectionProps> {
   render() {
     const {
+      apiMode,
+      agentStatus,
       showPrinterSettings,
       connection,
       networkIp,
       status,
       printers,
+      remotePrinters,
+      selectedRemotePrinterId,
       isBusy,
       onToggleSettings,
       onConnectionChange,
       onNetworkIpChange,
+      onSelectRemotePrinter,
       onRefresh,
     } = this.props;
+
+    const useLegacyConnection = apiMode === 'off';
 
     return (
       <View style={styles.printerCard}>
@@ -365,77 +410,147 @@ export class PrinterSection extends Component<PrinterSectionProps> {
         </View>
         {!showPrinterSettings ? (
           <Text style={styles.offsetHint}>
-            {printerSummaryHint(connection, networkIp, printers)}
+            {printerSummaryHint(
+              apiMode,
+              agentStatus,
+              connection,
+              networkIp,
+              printers,
+              remotePrinters,
+              selectedRemotePrinterId,
+            )}
           </Text>
         ) : null}
         {showPrinterSettings ? (
           <>
-            <View style={styles.offsetToolbar}>
-              <Text style={styles.sectionCaption}>Connection</Text>
-              {connection === 'usb' ? (
-                <Pressable
-                  onPress={onRefresh}
-                  disabled={isBusy}
-                  style={({pressed}) => [
-                    styles.smallButton,
-                    pressed && styles.pressed,
-                    isBusy && styles.disabled,
-                  ]}>
-                  <Text style={styles.smallButtonText}>Refresh</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <View style={styles.sizeSelector}>
-              {PRINTER_CONNECTIONS.map(option => (
-                <Pressable
-                  key={option.id}
-                  onPress={() => onConnectionChange(option.id)}
-                  style={({pressed}) => [
-                    styles.sizeButton,
-                    connection === option.id && styles.selectedSizeButton,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text
-                    style={[
-                      styles.sizeButtonTitle,
-                      connection === option.id && styles.selectedSizeButtonText,
-                    ]}>
-                    {option.title}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.sizeButtonSubtitle,
-                      connection === option.id && styles.selectedSizeButtonText,
-                    ]}>
-                    {option.subtitle}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            {connection === 'network' ? (
-              <View style={styles.networkIpField}>
-                <Text style={styles.networkIpLabel}>Printer IP</Text>
-                <TextInput
-                  value={networkIp}
-                  onChangeText={onNetworkIpChange}
-                  placeholder="192.168.1.100"
-                  placeholderTextColor="#9a9489"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="numbers-and-punctuation"
-                  style={styles.networkIpInput}
-                />
-              </View>
-            ) : null}
-            <Text style={styles.status}>{status}</Text>
-            {connection === 'usb'
-              ? printers.map(printer => (
+            {apiMode === 'agent' ? (
+              <>
+                <Text style={styles.offsetHint}>
+                  USB printer detected — this device is registered as a print agent.
+                </Text>
+                <Text style={styles.status}>{status}</Text>
+                {printers.map(printer => (
                   <Text key={printer.name} style={styles.printerText}>
                     {printer.productName || printer.name} ·{' '}
                     {printer.hasPermission ? 'allowed' : 'permission needed'}
                   </Text>
-                ))
-              : null}
+                ))}
+              </>
+            ) : null}
+            {apiMode === 'client' ? (
+              <>
+                <View style={styles.offsetToolbar}>
+                  <Text style={styles.sectionCaption}>Remote printers</Text>
+                  <Pressable
+                    onPress={onRefresh}
+                    disabled={isBusy}
+                    style={({pressed}) => [
+                      styles.smallButton,
+                      pressed && styles.pressed,
+                      isBusy && styles.disabled,
+                    ]}>
+                    <Text style={styles.smallButtonText}>Refresh</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.status}>{status}</Text>
+                {remotePrinters.length === 0 ? (
+                  <Text style={styles.offsetHint}>
+                    No printer agent is online. Connect a device with a USB printer.
+                  </Text>
+                ) : (
+                  remotePrinters.map(printer => (
+                    <Pressable
+                      key={printer.id}
+                      onPress={() => onSelectRemotePrinter(printer.id)}
+                      style={({pressed}) => [
+                        styles.sizeButton,
+                        selectedRemotePrinterId === printer.id &&
+                          styles.selectedSizeButton,
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.sizeButtonTitle,
+                          selectedRemotePrinterId === printer.id &&
+                            styles.selectedSizeButtonText,
+                        ]}>
+                        {printer.name}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </>
+            ) : null}
+            {useLegacyConnection ? (
+              <>
+                <View style={styles.offsetToolbar}>
+                  <Text style={styles.sectionCaption}>Connection</Text>
+                  {connection === 'usb' ? (
+                    <Pressable
+                      onPress={onRefresh}
+                      disabled={isBusy}
+                      style={({pressed}) => [
+                        styles.smallButton,
+                        pressed && styles.pressed,
+                        isBusy && styles.disabled,
+                      ]}>
+                      <Text style={styles.smallButtonText}>Refresh</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.sizeSelector}>
+                  {PRINTER_CONNECTIONS.map(option => (
+                    <Pressable
+                      key={option.id}
+                      onPress={() => onConnectionChange(option.id)}
+                      style={({pressed}) => [
+                        styles.sizeButton,
+                        connection === option.id && styles.selectedSizeButton,
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.sizeButtonTitle,
+                          connection === option.id && styles.selectedSizeButtonText,
+                        ]}>
+                        {option.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.sizeButtonSubtitle,
+                          connection === option.id && styles.selectedSizeButtonText,
+                        ]}>
+                        {option.subtitle}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {connection === 'network' ? (
+                  <View style={styles.networkIpField}>
+                    <Text style={styles.networkIpLabel}>Printer IP</Text>
+                    <TextInput
+                      value={networkIp}
+                      onChangeText={onNetworkIpChange}
+                      placeholder="192.168.1.100"
+                      placeholderTextColor="#9a9489"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="numbers-and-punctuation"
+                      style={styles.networkIpInput}
+                    />
+                  </View>
+                ) : null}
+                <Text style={styles.status}>{status}</Text>
+                {connection === 'usb'
+                  ? printers.map(printer => (
+                      <Text key={printer.name} style={styles.printerText}>
+                        {printer.productName || printer.name} ·{' '}
+                        {printer.hasPermission ? 'allowed' : 'permission needed'}
+                      </Text>
+                    ))
+                  : null}
+              </>
+            ) : null}
           </>
         ) : null}
       </View>

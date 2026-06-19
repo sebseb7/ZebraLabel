@@ -6,11 +6,13 @@ const STORAGE_KEY = 'printerSettings';
 export type PrinterSettings = {
   connection: PrinterConnection;
   networkIp: string;
+  selectedRemotePrinterId: string;
 };
 
 export const DEFAULT_PRINTER_SETTINGS: PrinterSettings = {
   connection: 'usb',
   networkIp: '',
+  selectedRemotePrinterId: '',
 };
 
 function normalizePrinterSettings(value: unknown): PrinterSettings {
@@ -18,13 +20,21 @@ function normalizePrinterSettings(value: unknown): PrinterSettings {
     return {...DEFAULT_PRINTER_SETTINGS};
   }
 
-  const stored = value as {connection?: unknown; networkIp?: unknown};
+  const stored = value as {
+    connection?: unknown;
+    networkIp?: unknown;
+    selectedRemotePrinterId?: unknown;
+  };
   const connection: PrinterConnection =
     stored.connection === 'network' ? 'network' : 'usb';
   const networkIp =
     typeof stored.networkIp === 'string' ? stored.networkIp.trim() : '';
+  const selectedRemotePrinterId =
+    typeof stored.selectedRemotePrinterId === 'string'
+      ? stored.selectedRemotePrinterId.trim()
+      : '';
 
-  return {connection, networkIp};
+  return {connection, networkIp, selectedRemotePrinterId};
 }
 
 export async function loadPrinterSettings(): Promise<PrinterSettings> {

@@ -107,7 +107,7 @@ export function PriceInputProvider({
       postPriceToApi: true,
       priceDigits: digits,
     };
-  }, [digits, needsPricePost, pendingBarcode, priceApi]);
+  }, [digits, needsPricePost, pendingBarcode, priceApiBaseUrl, priceApiToken]);
 
   const appendDigit = useCallback(
     (digit: string) => {
@@ -222,7 +222,7 @@ export function PriceInputProvider({
       setDigits(scannedDigits);
       onStatus(`Scanned price: ${formatPrice(scannedDigits)}`);
     },
-    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApi, printManyMode, resetBarcodeState],
+    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApiBaseUrl, priceApiToken, printManyMode, resetBarcodeState],
   );
 
   const handlePrint = useCallback(async () => {

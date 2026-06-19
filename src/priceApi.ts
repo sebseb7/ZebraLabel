@@ -16,9 +16,23 @@ export function normalizePriceApiBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
+export function normalizeApiToken(token: string): string {
+  let normalized = token.trim();
+
+  while (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+
+  return normalized.replace(/^["']+|["']+$/g, '').trim();
+}
+
 export function isPriceApiConfigured(baseUrl: string, token: string): boolean {
   return (
-    normalizePriceApiBaseUrl(baseUrl).length > 0 && token.trim().length > 0
+    normalizePriceApiBaseUrl(baseUrl).length > 0 &&
+    normalizeApiToken(token).length > 0
   );
 }
 
@@ -30,7 +44,8 @@ export function parsePriceApiQrPayload(raw: string): PriceApiQrConfig | null {
     }
 
     const url = typeof data.url === 'string' ? data.url.trim() : '';
-    const token = typeof data.token === 'string' ? data.token.trim() : '';
+    const token =
+      typeof data.token === 'string' ? normalizeApiToken(data.token) : '';
     if (!url || !token) {
       return null;
     }
@@ -44,7 +59,7 @@ export function parsePriceApiQrPayload(raw: string): PriceApiQrConfig | null {
 function authHeaders(token: string): Record<string, string> {
   return {
     Accept: 'application/json',
-    Authorization: `Bearer ${token.trim()}`,
+    Authorization: `Bearer ${normalizeApiToken(token)}`,
   };
 }
 
