@@ -1,10 +1,13 @@
 import React, {Component} from 'react';
-import {Modal, Pressable, Text, TextInput, View} from 'react-native';
+import {ActivityIndicator, Alert, Modal, Pressable, Text, TextInput, View} from 'react-native';
 import {LABEL_OFFSET_STEP_MM, type LabelOffset, type LabelSizeId} from '../buildZpl';
 import {styles} from '../appStyles';
 import {formatOffsetMm, hasActiveOffset} from '../appUtils';
+import {isBarcodeScanCanceled, scanQrCode} from '../barcodeScanner';
 import {LABEL_SIZES} from '../labelSizes';
+import {parsePriceApiQrPayload} from '../priceApi';
 import {type PrinterConnection, type ZebraUsbPrinter} from '../zebraPrinter';
+import {BarcodeIcon} from './BarcodeIcon';
 import {OffsetButton} from './OffsetButton';
 
 export class AppHeader extends Component<{
@@ -34,13 +37,64 @@ export class AppHeader extends Component<{
 type ApiSettingsModalProps = {
   visible: boolean;
   apiBaseUrl: string;
+  apiToken: string;
   onApiBaseUrlChange: (url: string) => void;
+  onApiTokenChange: (token: string) => void;
   onClose: () => void;
 };
 
-export class ApiSettingsModal extends Component<ApiSettingsModalProps> {
+type ApiSettingsModalState = {
+  isScanningQr: boolean;
+};
+
+export class ApiSettingsModal extends Component<
+  ApiSettingsModalProps,
+  ApiSettingsModalState
+> {
+  state: ApiSettingsModalState = {
+    isScanningQr: false,
+  };
+
+  handleScanQr = async () => {
+    if (this.state.isScanningQr) {
+      return;
+    }
+
+    this.setState({isScanningQr: true});
+
+    try {
+      const value = await scanQrCode();
+      if (!value) {
+        return;
+      }
+
+      const config = parsePriceApiQrPayload(value);
+      if (!config) {
+        Alert.alert(
+          'Invalid QR code',
+          'Expected JSON with url and token from the web UI.',
+        );
+        return;
+      }
+
+      this.props.onApiBaseUrlChange(config.url);
+      this.props.onApiTokenChange(config.token);
+    } catch (error) {
+      if (!isBarcodeScanCanceled(error)) {
+        Alert.alert(
+          'QR scan failed',
+          error instanceof Error ? error.message : 'Could not scan QR code',
+        );
+      }
+    } finally {
+      this.setState({isScanningQr: false});
+    }
+  };
+
   render() {
-    const {visible, apiBaseUrl, onApiBaseUrlChange, onClose} = this.props;
+    const {visible, apiBaseUrl, apiToken, onApiBaseUrlChange, onApiTokenChange, onClose} =
+      this.props;
+    const {isScanningQr} = this.state;
 
     return (
       <Modal
@@ -59,15 +113,34 @@ export class ApiSettingsModal extends Component<ApiSettingsModalProps> {
               </Pressable>
             </View>
             <Text style={styles.modalHint}>
-              Barcode price API base URL. Scanned barcodes are looked up here; unknown
-              prices are saved after you print.
+              Scan the API token QR from the web UI, or enter URL and token manually.
+              Scanned barcodes are looked up here; unknown prices are saved after you print.
             </Text>
+            <Pressable
+              accessibilityLabel="Scan API setup QR code"
+              accessibilityRole="button"
+              disabled={isScanningQr}
+              onPress={this.handleScanQr}
+              style={({pressed}) => [
+                styles.apiQrScanButton,
+                pressed && styles.pressed,
+                isScanningQr && styles.disabled,
+              ]}>
+              {isScanningQr ? (
+                <ActivityIndicator color="#191919" />
+              ) : (
+                <>
+                  <BarcodeIcon />
+                  <Text style={styles.apiQrScanButtonText}>Scan setup QR</Text>
+                </>
+              )}
+            </Pressable>
             <View style={styles.networkIpField}>
               <Text style={styles.networkIpLabel}>API base URL</Text>
               <TextInput
                 value={apiBaseUrl}
                 onChangeText={onApiBaseUrlChange}
-                placeholder="http://192.168.1.10:3456"
+                placeholder="http://192.168.1.10:3991"
                 placeholderTextColor="#9a9489"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -75,8 +148,21 @@ export class ApiSettingsModal extends Component<ApiSettingsModalProps> {
                 style={styles.networkIpInput}
               />
             </View>
+            <View style={styles.networkIpField}>
+              <Text style={styles.networkIpLabel}>API token</Text>
+              <TextInput
+                value={apiToken}
+                onChangeText={onApiTokenChange}
+                placeholder="amt_…"
+                placeholderTextColor="#9a9489"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                style={styles.networkIpInput}
+              />
+            </View>
             <Text style={styles.modalExample}>
-              Endpoints: GET/PUT /prices/&#123;barcode&#125; with &#123;"price":"4.99"&#125;
+              Endpoints: GET/PUT /api/v1/price with Bearer token
             </Text>
           </Pressable>
         </Pressable>

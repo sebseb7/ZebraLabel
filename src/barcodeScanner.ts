@@ -3,6 +3,7 @@ import {errorMessage} from './appUtils';
 
 type BarcodeScannerModule = {
   scan(): Promise<string>;
+  scanQr(): Promise<string>;
 };
 
 const NativeBarcodeScanner = NativeModules.BarcodeScanner as
@@ -40,7 +41,10 @@ export function isBarcodeScanCanceled(error: unknown): boolean {
   return error instanceof BarcodeScanError && error.code === 'E_CANCELED';
 }
 
-export async function scanBarcode(): Promise<string | null> {
+async function invokeScan(
+  method: 'scan' | 'scanQr',
+  unavailableMessage: string,
+): Promise<string | null> {
   if (Platform.OS !== 'android') {
     throw new BarcodeScanError(
       'E_UNSUPPORTED',
@@ -48,16 +52,25 @@ export async function scanBarcode(): Promise<string | null> {
     );
   }
 
-  if (!NativeBarcodeScanner?.scan) {
-    throw new BarcodeScanError(
-      'E_UNAVAILABLE',
-      'Barcode scanner native module is not available',
-    );
+  const nativeMethod = NativeBarcodeScanner?.[method];
+  if (!nativeMethod) {
+    throw new BarcodeScanError('E_UNAVAILABLE', unavailableMessage);
   }
 
   try {
-    return await NativeBarcodeScanner.scan();
+    return await nativeMethod.call(NativeBarcodeScanner);
   } catch (error) {
     throw normalizeError(error);
   }
+}
+
+export async function scanBarcode(): Promise<string | null> {
+  return invokeScan(
+    'scan',
+    'Barcode scanner native module is not available',
+  );
+}
+
+export async function scanQrCode(): Promise<string | null> {
+  return invokeScan('scanQr', 'QR scanner native module is not available');
 }

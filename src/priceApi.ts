@@ -7,43 +7,118 @@ export class PriceApiError extends Error {
   }
 }
 
+export type PriceApiQrConfig = {
+  url: string;
+  token: string;
+};
+
 export function normalizePriceApiBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
-export function isPriceApiConfigured(baseUrl: string): boolean {
-  return normalizePriceApiBaseUrl(baseUrl).length > 0;
+export function isPriceApiConfigured(baseUrl: string, token: string): boolean {
+  return (
+    normalizePriceApiBaseUrl(baseUrl).length > 0 && token.trim().length > 0
+  );
 }
 
-function priceEndpoint(baseUrl: string, barcode: string): string {
-  return `${normalizePriceApiBaseUrl(baseUrl)}/prices/${encodeURIComponent(barcode)}`;
+export function parsePriceApiQrPayload(raw: string): PriceApiQrConfig | null {
+  try {
+    const data = JSON.parse(raw.trim()) as {url?: unknown; token?: unknown};
+    if (!data || typeof data !== 'object') {
+      return null;
+    }
+
+    const url = typeof data.url === 'string' ? data.url.trim() : '';
+    const token = typeof data.token === 'string' ? data.token.trim() : '';
+    if (!url || !token) {
+      return null;
+    }
+
+    return {url, token};
+  } catch {
+    return null;
+  }
 }
 
-type PriceResponse = {
+function authHeaders(token: string): Record<string, string> {
+  return {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token.trim()}`,
+  };
+}
+
+function priceReadEndpoint(baseUrl: string, barcode: string): string {
+  const base = normalizePriceApiBaseUrl(baseUrl);
+  return `${base}/api/v1/price?barcode=${encodeURIComponent(barcode)}`;
+}
+
+function priceWriteEndpoint(baseUrl: string): string {
+  return `${normalizePriceApiBaseUrl(baseUrl)}/api/v1/price`;
+}
+
+type PriceReadResponse = {
+  found?: boolean;
   price?: unknown;
 };
+
+function normalizeApiPrice(price: unknown): string | null {
+  if (price == null || price === '') {
+    return null;
+  }
+
+  if (typeof price === 'number') {
+    return Number.isFinite(price) ? price.toFixed(2) : null;
+  }
+
+  const text = String(price).trim().replace(/\s/g, '');
+  if (!text) {
+    return null;
+  }
+
+  const numeric = Number(text.replace(',', '.'));
+  if (Number.isFinite(numeric)) {
+    return numeric.toFixed(2);
+  }
+
+  return null;
+}
 
 function readPriceValue(data: unknown): string | null {
   if (!data || typeof data !== 'object') {
     return null;
   }
 
-  const price = (data as PriceResponse).price;
-  if (price == null || price === '') {
+  const response = data as PriceReadResponse;
+  if (response.found === false) {
     return null;
   }
 
-  return String(price);
+  return normalizeApiPrice(response.price);
+}
+
+async function readApiError(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as {error?: unknown};
+    if (typeof data.error === 'string' && data.error.trim()) {
+      return data.error;
+    }
+  } catch {
+    // Fall back to status text below.
+  }
+
+  return `Request failed (${response.status})`;
 }
 
 export async function fetchPriceByBarcode(
   baseUrl: string,
+  token: string,
   barcode: string,
 ): Promise<string | null> {
   try {
-    const response = await fetch(priceEndpoint(baseUrl, barcode), {
+    const response = await fetch(priceReadEndpoint(baseUrl, barcode), {
       method: 'GET',
-      headers: {Accept: 'application/json'},
+      headers: authHeaders(token),
     });
 
     if (response.status === 404) {
@@ -51,7 +126,7 @@ export async function fetchPriceByBarcode(
     }
 
     if (!response.ok) {
-      throw new PriceApiError(`Price lookup failed (${response.status})`);
+      throw new PriceApiError(await readApiError(response));
     }
 
     return readPriceValue(await response.json());
@@ -66,21 +141,27 @@ export async function fetchPriceByBarcode(
 
 export async function savePriceByBarcode(
   baseUrl: string,
+  token: string,
   barcode: string,
   price: string,
 ): Promise<void> {
+  const numericPrice = Number(price);
+  if (!Number.isFinite(numericPrice)) {
+    throw new PriceApiError('Invalid price value');
+  }
+
   try {
-    const response = await fetch(priceEndpoint(baseUrl, barcode), {
+    const response = await fetch(priceWriteEndpoint(baseUrl), {
       method: 'PUT',
       headers: {
-        Accept: 'application/json',
+        ...authHeaders(token),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({price}),
+      body: JSON.stringify({barcode, price: numericPrice}),
     });
 
     if (!response.ok) {
-      throw new PriceApiError(`Failed to save price (${response.status})`);
+      throw new PriceApiError(await readApiError(response));
     }
   } catch (error) {
     if (error instanceof PriceApiError) {

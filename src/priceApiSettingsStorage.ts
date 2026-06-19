@@ -4,10 +4,12 @@ const STORAGE_KEY = 'priceApiSettings';
 
 export type PriceApiSettings = {
   baseUrl: string;
+  token: string;
 };
 
 export const DEFAULT_PRICE_API_SETTINGS: PriceApiSettings = {
   baseUrl: '',
+  token: '',
 };
 
 function normalizePriceApiSettings(value: unknown): PriceApiSettings {
@@ -15,10 +17,11 @@ function normalizePriceApiSettings(value: unknown): PriceApiSettings {
     return {...DEFAULT_PRICE_API_SETTINGS};
   }
 
-  const stored = value as {baseUrl?: unknown};
+  const stored = value as {baseUrl?: unknown; token?: unknown};
   const baseUrl = typeof stored.baseUrl === 'string' ? stored.baseUrl.trim() : '';
+  const token = typeof stored.token === 'string' ? stored.token.trim() : '';
 
-  return {baseUrl};
+  return {baseUrl, token};
 }
 
 export async function loadPriceApiSettings(): Promise<PriceApiSettings> {

@@ -17,6 +17,7 @@ import {
 } from '../appUtils';
 import {isBarcodeScanCanceled, scanBarcode} from '../barcodeScanner';
 import {fetchPriceByBarcode, isPriceApiConfigured} from '../priceApi';
+import type {PriceApiSettings} from '../priceApiSettingsStorage';
 import {BarcodeIcon} from './BarcodeIcon';
 import {Key} from './Key';
 
@@ -55,9 +56,9 @@ function usePriceInput() {
   return value;
 }
 
-type PriceInputProviderProps = {
+export type PriceInputProviderProps = {
   isBusy: boolean;
-  priceApiBaseUrl: string;
+  priceApi: PriceApiSettings;
   onPrint: (price: string, meta?: PrintMeta) => Promise<void>;
   onPrintMany: (price: string, count: number, meta?: PrintMeta) => Promise<boolean>;
   onStatus: (status: string) => void;
@@ -66,12 +67,13 @@ type PriceInputProviderProps = {
 
 export function PriceInputProvider({
   isBusy,
-  priceApiBaseUrl,
+  priceApi,
   onPrint,
   onPrintMany,
   onStatus,
   children,
 }: PriceInputProviderProps) {
+  const {baseUrl: priceApiBaseUrl, token: priceApiToken} = priceApi;
   const [digits, setDigits] = useState('');
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
   const [needsPricePost, setNeedsPricePost] = useState(false);
@@ -92,7 +94,7 @@ export function PriceInputProvider({
   }, []);
 
   const buildPrintMeta = useCallback((): PrintMeta | undefined => {
-    if (!pendingBarcode || !digits || !isPriceApiConfigured(priceApiBaseUrl)) {
+    if (!pendingBarcode || !digits || !isPriceApiConfigured(priceApiBaseUrl, priceApiToken)) {
       return undefined;
     }
 
@@ -105,7 +107,7 @@ export function PriceInputProvider({
       postPriceToApi: true,
       priceDigits: digits,
     };
-  }, [digits, needsPricePost, pendingBarcode, priceApiBaseUrl]);
+  }, [digits, needsPricePost, pendingBarcode, priceApi]);
 
   const appendDigit = useCallback(
     (digit: string) => {
@@ -157,7 +159,7 @@ export function PriceInputProvider({
         return;
       }
 
-      if (isPriceApiConfigured(priceApiBaseUrl)) {
+      if (isPriceApiConfigured(priceApiBaseUrl, priceApiToken)) {
         if (
           pendingBarcode &&
           pendingBarcode !== barcode &&
@@ -180,7 +182,11 @@ export function PriceInputProvider({
         onStatus(`Looking up ${barcode}...`);
 
         try {
-          const apiPrice = await fetchPriceByBarcode(priceApiBaseUrl, barcode);
+          const apiPrice = await fetchPriceByBarcode(
+            priceApiBaseUrl,
+            priceApiToken,
+            barcode,
+          );
           if (apiPrice) {
             const scannedDigits = decimalPriceToDigits(apiPrice);
             if (scannedDigits) {
@@ -216,7 +222,7 @@ export function PriceInputProvider({
       setDigits(scannedDigits);
       onStatus(`Scanned price: ${formatPrice(scannedDigits)}`);
     },
-    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApiBaseUrl, printManyMode, resetBarcodeState],
+    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApi, printManyMode, resetBarcodeState],
   );
 
   const handlePrint = useCallback(async () => {

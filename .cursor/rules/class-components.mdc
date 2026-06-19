@@ -3,3 +3,7 @@ alwaysApply: true
 ---
 
 prefer react class components over function components
+
+run: 
+* emulator -avd a11 
+* npm run android

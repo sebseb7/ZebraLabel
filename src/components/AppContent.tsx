@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, ScrollView, StatusBar, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
@@ -23,7 +23,7 @@ import {
   loadPriceApiSettings,
   savePriceApiSettings,
 } from '../priceApiSettingsStorage';
-import {savePriceByBarcode} from '../priceApi';
+import {savePriceByBarcode, isPriceApiConfigured} from '../priceApi';
 import {clamp, digitsToDecimalPrice, errorMessage, ZERO_OFFSET} from '../appUtils';
 import {LABEL_SIZES} from '../labelSizes';
 import {
@@ -64,6 +64,9 @@ export function AppContent() {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [priceApiBaseUrl, setPriceApiBaseUrl] = useState(
     DEFAULT_PRICE_API_SETTINGS.baseUrl,
+  );
+  const [priceApiToken, setPriceApiToken] = useState(
+    DEFAULT_PRICE_API_SETTINGS.token,
   );
   const priceApiSettingsHydratedRef = useRef(false);
   const [status, setStatus] = useState('Ready');
@@ -188,6 +191,7 @@ export function AppContent() {
       }
 
       setPriceApiBaseUrl(storedSettings.baseUrl);
+      setPriceApiToken(storedSettings.token);
       priceApiSettingsHydratedRef.current = true;
     });
 
@@ -201,8 +205,8 @@ export function AppContent() {
       return;
     }
 
-    savePriceApiSettings({baseUrl: priceApiBaseUrl});
-  }, [priceApiBaseUrl]);
+    savePriceApiSettings({baseUrl: priceApiBaseUrl, token: priceApiToken});
+  }, [priceApiBaseUrl, priceApiToken]);
 
   const postPriceToApi = useCallback(
     async (meta: PrintMeta | undefined): Promise<string | null> => {
@@ -210,20 +214,25 @@ export function AppContent() {
         !meta?.postPriceToApi ||
         !meta.barcode ||
         !meta.priceDigits ||
-        !priceApiBaseUrl.trim()
+        !isPriceApiConfigured(priceApiBaseUrl, priceApiToken)
       ) {
         return null;
       }
 
       try {
         const decimalPrice = digitsToDecimalPrice(meta.priceDigits);
-        await savePriceByBarcode(priceApiBaseUrl, meta.barcode, decimalPrice);
+        await savePriceByBarcode(
+          priceApiBaseUrl,
+          priceApiToken,
+          meta.barcode,
+          decimalPrice,
+        );
         return `saved price for ${meta.barcode}`;
       } catch (error) {
         return `API save failed: ${errorMessage(error)}`;
       }
     },
-    [priceApiBaseUrl],
+    [priceApiBaseUrl, priceApiToken],
   );
 
   const handlePrint = useCallback(
@@ -317,12 +326,17 @@ export function AppContent() {
   const nudgeX = useCallback((delta: number) => nudgeOffset('xMm', delta), [nudgeOffset]);
   const nudgeY = useCallback((delta: number) => nudgeOffset('yMm', delta), [nudgeOffset]);
 
+  const priceApi = useMemo(
+    () => ({baseUrl: priceApiBaseUrl, token: priceApiToken}),
+    [priceApiBaseUrl, priceApiToken],
+  );
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#f7f3eb" />
       <PriceInputProvider
         isBusy={isBusy}
-        priceApiBaseUrl={priceApiBaseUrl}
+        priceApi={priceApi}
         onPrint={handlePrint}
         onPrintMany={handlePrintMany}
         onStatus={setStatus}>
@@ -366,7 +380,9 @@ export function AppContent() {
       <ApiSettingsModal
         visible={showApiSettings}
         apiBaseUrl={priceApiBaseUrl}
+        apiToken={priceApiToken}
         onApiBaseUrlChange={setPriceApiBaseUrl}
+        onApiTokenChange={setPriceApiToken}
         onClose={() => setShowApiSettings(false)}
       />
     </View>

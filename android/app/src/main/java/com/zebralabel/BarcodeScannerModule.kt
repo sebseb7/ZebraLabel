@@ -16,6 +16,22 @@ class BarcodeScannerModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun scan(promise: Promise) {
+    startScan(promise) { builder ->
+      builder.setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8)
+    }
+  }
+
+  @ReactMethod
+  fun scanQr(promise: Promise) {
+    startScan(promise) { builder ->
+      builder.setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+    }
+  }
+
+  private fun startScan(
+    promise: Promise,
+    configureFormats: (GmsBarcodeScannerOptions.Builder) -> GmsBarcodeScannerOptions.Builder,
+  ) {
     val activity = reactContext.currentActivity
     if (activity == null) {
       promise.reject("E_NO_ACTIVITY", "Cannot scan without an active screen")
@@ -23,8 +39,7 @@ class BarcodeScannerModule(private val reactContext: ReactApplicationContext) :
     }
 
     activity.runOnUiThread {
-      val options = GmsBarcodeScannerOptions.Builder()
-        .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8)
+      val options = configureFormats(GmsBarcodeScannerOptions.Builder())
         .enableAutoZoom()
         .allowManualInput()
         .build()
