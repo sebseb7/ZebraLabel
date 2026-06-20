@@ -13,6 +13,7 @@ import {
   barcodeValueToDigits,
   decimalPriceToDigits,
   formatPrice,
+  getEanValidation,
   MAX_DIGITS,
 } from '../appUtils';
 import {isBarcodeScanCanceled, scanBarcode} from '../barcodeScanner';
@@ -24,15 +25,48 @@ import {Key} from './Key';
 const DIGIT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 const MAX_PRINT_COUNT_DIGITS = 4;
 
+function barcodeApiStatusLabel(lookup: BarcodeApiLookupState): string {
+  switch (lookup.status) {
+    case 'loading':
+      return 'Looking up...';
+    case 'found':
+      return lookup.price;
+    case 'not_found':
+      return 'Not in API';
+    case 'error':
+      return lookup.message;
+  }
+}
+
+function barcodeApiStatusStyle(lookup: BarcodeApiLookupState) {
+  switch (lookup.status) {
+    case 'loading':
+      return styles.barcodeApiStatusLoading;
+    case 'found':
+      return styles.barcodeApiStatusFound;
+    case 'not_found':
+      return styles.barcodeApiStatusNotFound;
+    case 'error':
+      return styles.barcodeApiStatusError;
+  }
+}
+
 export type PrintMeta = {
   barcode?: string;
   postPriceToApi?: boolean;
   priceDigits?: string;
 };
 
+export type BarcodeApiLookupState =
+  | {status: 'loading'}
+  | {status: 'found'; price: string}
+  | {status: 'not_found'}
+  | {status: 'error'; message: string};
+
 type PriceInputContextValue = {
   price: string;
   pendingBarcode: string | null;
+  barcodeApiLookup: BarcodeApiLookupState | null;
   printManyMode: boolean;
   printCount: string;
   isBusy: boolean;
@@ -76,6 +110,7 @@ export function PriceInputProvider({
   const {baseUrl: priceApiBaseUrl, token: priceApiToken} = priceApi;
   const [digits, setDigits] = useState('');
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
+  const [barcodeApiLookup, setBarcodeApiLookup] = useState<BarcodeApiLookupState | null>(null);
   const [needsPricePost, setNeedsPricePost] = useState(false);
   const [isResolvingBarcode, setIsResolvingBarcode] = useState(false);
   const [printManyMode, setPrintManyMode] = useState(false);
@@ -85,6 +120,7 @@ export function PriceInputProvider({
 
   const resetBarcodeState = useCallback(() => {
     setPendingBarcode(null);
+    setBarcodeApiLookup(null);
     setNeedsPricePost(false);
   }, []);
 
@@ -177,6 +213,7 @@ export function PriceInputProvider({
 
         setIsResolvingBarcode(true);
         setPendingBarcode(barcode);
+        setBarcodeApiLookup({status: 'loading'});
         setDigits('');
         setNeedsPricePost(false);
         onStatus(`Looking up ${barcode}...`);
@@ -190,22 +227,26 @@ export function PriceInputProvider({
           if (apiPrice) {
             const scannedDigits = decimalPriceToDigits(apiPrice);
             if (scannedDigits) {
+              const formattedPrice = formatPrice(scannedDigits);
               setDigits(scannedDigits);
               setNeedsPricePost(false);
-              onStatus(`Scanned ${barcode}: ${formatPrice(scannedDigits)}`);
+              setBarcodeApiLookup({status: 'found', price: formattedPrice});
+              onStatus(`Scanned ${barcode}: ${formattedPrice}`);
               return;
             }
           }
 
           setNeedsPricePost(true);
+          setBarcodeApiLookup({status: 'not_found'});
           onStatus(`No price for ${barcode} — enter price and print`);
         } catch (error) {
-          setNeedsPricePost(true);
-          onStatus(
+          const message =
             error instanceof Error
-              ? `${error.message} — enter price manually`
-              : 'API lookup failed — enter price manually',
-          );
+              ? error.message
+              : 'API lookup failed';
+          setNeedsPricePost(true);
+          setBarcodeApiLookup({status: 'error', message});
+          onStatus(`${message} — enter price manually`);
         } finally {
           setIsResolvingBarcode(false);
         }
@@ -303,6 +344,7 @@ export function PriceInputProvider({
     () => ({
       price,
       pendingBarcode,
+      barcodeApiLookup,
       printManyMode,
       printCount,
       isBusy,
@@ -326,6 +368,7 @@ export function PriceInputProvider({
       isBusy,
       isResolvingBarcode,
       pendingBarcode,
+      barcodeApiLookup,
       price,
       printCount,
       printManyMode,
@@ -336,8 +379,13 @@ export function PriceInputProvider({
 }
 
 export const PriceDisplay = memo(function PriceDisplay() {
-  const {price, pendingBarcode, isBusy, resolveBarcodeScan, showStatus} = usePriceInput();
+  const {price, pendingBarcode, barcodeApiLookup, isBusy, resolveBarcodeScan, showStatus} =
+    usePriceInput();
   const [isScanning, setIsScanning] = useState(false);
+  const barcodeValidation = useMemo(
+    () => (pendingBarcode ? getEanValidation(pendingBarcode) : null),
+    [pendingBarcode],
+  );
 
   const handleScanPress = useCallback(async () => {
     if (isBusy || isScanning) {
@@ -385,7 +433,31 @@ export const PriceDisplay = memo(function PriceDisplay() {
         </Pressable>
       </View>
       {pendingBarcode ? (
-        <Text style={styles.barcodeHint}>Barcode: {pendingBarcode}</Text>
+        <View style={styles.barcodeHintRow}>
+          <Text
+            style={[
+              styles.barcodeHint,
+              barcodeValidation === 'ean8' && styles.barcodeHintEan8,
+              barcodeValidation === 'ean13' && styles.barcodeHintEan13,
+              barcodeValidation === 'invalid' && styles.barcodeHintInvalid,
+            ]}>
+            Barcode: {pendingBarcode}
+          </Text>
+          {barcodeApiLookup ? (
+            <View style={styles.barcodeApiStatusRow}>
+              {barcodeApiLookup.status === 'loading' ? (
+                <ActivityIndicator color="#6d6a63" size="small" />
+              ) : null}
+              <Text
+                style={[
+                  styles.barcodeApiStatus,
+                  barcodeApiStatusStyle(barcodeApiLookup),
+                ]}>
+                {barcodeApiStatusLabel(barcodeApiLookup)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );

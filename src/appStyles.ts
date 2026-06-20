@@ -84,6 +84,43 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  barcodeHintEan8: {
+    color: '#2f6b4f',
+  },
+  barcodeHintEan13: {
+    color: '#2f5f8a',
+  },
+  barcodeHintInvalid: {
+    color: '#a33d2f',
+  },
+  barcodeHintRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  barcodeApiStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  barcodeApiStatusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  barcodeApiStatusLoading: {
+    color: '#6d6a63',
+  },
+  barcodeApiStatusFound: {
+    color: '#2f6b4f',
+  },
+  barcodeApiStatusNotFound: {
+    color: '#8a6d3b',
+  },
+  barcodeApiStatusError: {
+    color: '#a33d2f',
+  },
   title: {
     color: '#191919',
     fontSize: 30,

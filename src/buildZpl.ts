@@ -45,50 +45,22 @@ function zplLabelStart(
 ${labelHome(offset)}`;
 }
 
-function estimateFont0TextWidth(text: string, fontHeight: number): number {
-  let width = 0;
-
-  for (const char of text) {
-    if (char === '1' || char === ',' || char === '.') {
-      width += fontHeight * 0.3;
-    } else if (char === ' ') {
-      width += fontHeight * 0.25;
-    } else if (char === '€') {
-      width += fontHeight * 0.58;
-    } else {
-      width += fontHeight * 0.54;
-    }
-  }
-
-  return Math.round(width);
-}
-
 function buildSmallLabelZpl(price: string, offset: LabelOffset): string {
   const labelWidth = 203;
   const labelHeight = 102;
   const fontHeight = 48;
   const pillHeight = 60;
-  const textPaddingLeft = 14;
-  const textPaddingRight = 10;
   const textNudgeY = 5;
-  const maxPillWidth = labelWidth - 8;
-
-  const textWidth = estimateFont0TextWidth(price, fontHeight);
-  const pillWidth = Math.min(
-    textWidth + textPaddingLeft + textPaddingRight,
-    maxPillWidth,
-  );
-  const pillX = Math.round((labelWidth - pillWidth) / 2);
+  const pillWidth = labelWidth - 23;
+  const pillX = Math.floor((labelWidth - pillWidth) / 2);
   const pillY = Math.round((labelHeight - pillHeight) / 2);
-  const textX = pillX + textPaddingLeft;
   const textY =
     pillY + Math.round((pillHeight - fontHeight) / 2) + textNudgeY;
-  const textFieldWidth = pillWidth - textPaddingLeft - textPaddingRight;
 
   return `${zplLabelStart(offset, labelWidth, labelHeight)}
 ^FO${pillX},${pillY}^GB${pillWidth},${pillHeight},${pillHeight},B,6^FS
 ^CF0,${fontHeight}
-^FO${textX},${textY}^FB${textFieldWidth},1,0,L,0^FR^FD${price}^FS
+^FO${pillX},${textY}^FB${pillWidth},1,0,C,0^FR^FD${price}^FS
 ^XZ
 `;
 }

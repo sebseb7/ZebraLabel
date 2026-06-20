@@ -130,16 +130,19 @@ export async function printToRemotePrinter(
       error?: unknown;
     };
 
+    const ok = data.ok === true;
+    const error =
+      typeof data.error === 'string' && data.error.trim()
+        ? data.error
+        : ok
+          ? null
+          : 'Print failed';
+
     return {
       jobId: typeof data.jobId === 'string' ? data.jobId : '',
       printerId: typeof data.printerId === 'string' ? data.printerId : printerId,
-      ok: data.ok === true,
-      error:
-        typeof data.error === 'string' && data.error.trim()
-          ? data.error
-          : data.ok === true
-            ? null
-            : 'Print failed',
+      ok,
+      error,
     };
   } catch (error) {
     if (error instanceof PrinterApiError) {

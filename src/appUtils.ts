@@ -34,6 +34,35 @@ export function decimalPriceToDigits(price: string): string {
   return normalized.replace(/\D/g, '').slice(0, MAX_DIGITS);
 }
 
+export type EanValidation = 'ean8' | 'ean13' | 'invalid';
+
+function eanCheckDigit(dataDigits: number[]): number {
+  const sum = dataDigits.reduce(
+    (total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3),
+    0,
+  );
+  return (10 - (sum % 10)) % 10;
+}
+
+export function getEanValidation(barcode: string): EanValidation {
+  const digits = barcode.replace(/\D/g, '');
+  if (!digits) {
+    return 'invalid';
+  }
+
+  if (digits.length === 8) {
+    const nums = digits.split('').map(digit => Number(digit));
+    return eanCheckDigit(nums.slice(0, 7)) === nums[7] ? 'ean8' : 'invalid';
+  }
+
+  if (digits.length === 13) {
+    const nums = digits.split('').map(digit => Number(digit));
+    return eanCheckDigit(nums.slice(0, 12)) === nums[12] ? 'ean13' : 'invalid';
+  }
+
+  return 'invalid';
+}
+
 export function barcodeValueToDigits(raw: string): string {
   const normalized = raw.trim().replace(/\s/g, '');
   const decimalMatch = normalized.match(/^[^\d]*(\d+)[.,](\d{1,2})[^\d]*$/);
