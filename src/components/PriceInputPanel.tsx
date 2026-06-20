@@ -387,7 +387,7 @@ export function PriceInputProvider({
   return <PriceInputContext.Provider value={value}>{children}</PriceInputContext.Provider>;
 }
 
-export const PriceDisplay = memo(function PriceDisplay() {
+export const PriceDisplay = memo(function PriceDisplayPanel() {
   const {price, pendingBarcode, barcodeApiLookup, isBusy, resolveBarcodeScan, showStatus} =
     usePriceInput();
   const [isScanning, setIsScanning] = useState(false);
@@ -478,12 +478,12 @@ type DigitKeyProps = {
   onAppend: (digit: string) => void;
 };
 
-const DigitKey = memo(function DigitKey({digit, active, onAppend}: DigitKeyProps) {
+const DigitKey = memo(function DigitKeyButton({digit, active, onAppend}: DigitKeyProps) {
   const onPress = useCallback(() => onAppend(digit), [digit, onAppend]);
   return <Key label={digit} onPress={onPress} active={active} />;
 });
 
-export const PriceKeypad = memo(function PriceKeypad() {
+export const PriceKeypad = memo(function PriceKeypadPanel() {
   const {
     printManyMode,
     printCount,
