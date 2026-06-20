@@ -3,7 +3,9 @@ import React, {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -70,7 +72,6 @@ type PriceInputContextValue = {
   printManyMode: boolean;
   printCount: string;
   isBusy: boolean;
-  isResolvingBarcode: boolean;
   appendDigit: (digit: string) => void;
   backspace: () => void;
   clear: () => void;
@@ -112,17 +113,26 @@ export function PriceInputProvider({
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
   const [barcodeApiLookup, setBarcodeApiLookup] = useState<BarcodeApiLookupState | null>(null);
   const [needsPricePost, setNeedsPricePost] = useState(false);
-  const [isResolvingBarcode, setIsResolvingBarcode] = useState(false);
   const [printManyMode, setPrintManyMode] = useState(false);
   const [printCount, setPrintCount] = useState('');
+  const barcodeLookupSeqRef = useRef(0);
+  const barcodeLookupAbortRef = useRef<AbortController | null>(null);
+
+  const cancelBarcodeLookup = useCallback(() => {
+    barcodeLookupAbortRef.current?.abort();
+    barcodeLookupAbortRef.current = null;
+  }, []);
+
+  useEffect(() => () => cancelBarcodeLookup(), [cancelBarcodeLookup]);
 
   const price = useMemo(() => formatPrice(digits), [digits]);
 
   const resetBarcodeState = useCallback(() => {
+    cancelBarcodeLookup();
     setPendingBarcode(null);
     setBarcodeApiLookup(null);
     setNeedsPricePost(false);
-  }, []);
+  }, [cancelBarcodeLookup]);
 
   const exitPrintManyMode = useCallback(() => {
     setPrintManyMode(false);
@@ -211,7 +221,10 @@ export function PriceInputProvider({
           return;
         }
 
-        setIsResolvingBarcode(true);
+        const lookupSeq = ++barcodeLookupSeqRef.current;
+        cancelBarcodeLookup();
+        const lookupAbort = new AbortController();
+        barcodeLookupAbortRef.current = lookupAbort;
         setPendingBarcode(barcode);
         setBarcodeApiLookup({status: 'loading'});
         setDigits('');
@@ -223,7 +236,12 @@ export function PriceInputProvider({
             priceApiBaseUrl,
             priceApiToken,
             barcode,
+            lookupAbort.signal,
           );
+          if (lookupSeq !== barcodeLookupSeqRef.current) {
+            return;
+          }
+          barcodeLookupAbortRef.current = null;
           if (apiPrice) {
             const scannedDigits = decimalPriceToDigits(apiPrice);
             if (scannedDigits) {
@@ -240,6 +258,13 @@ export function PriceInputProvider({
           setBarcodeApiLookup({status: 'not_found'});
           onStatus(`No price for ${barcode} — enter price and print`);
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
+          if (lookupSeq !== barcodeLookupSeqRef.current) {
+            return;
+          }
+          barcodeLookupAbortRef.current = null;
           const message =
             error instanceof Error
               ? error.message
@@ -247,8 +272,6 @@ export function PriceInputProvider({
           setNeedsPricePost(true);
           setBarcodeApiLookup({status: 'error', message});
           onStatus(`${message} — enter price manually`);
-        } finally {
-          setIsResolvingBarcode(false);
         }
         return;
       }
@@ -263,17 +286,12 @@ export function PriceInputProvider({
       setDigits(scannedDigits);
       onStatus(`Scanned price: ${formatPrice(scannedDigits)}`);
     },
-    [digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApiBaseUrl, priceApiToken, printManyMode, resetBarcodeState],
+    [cancelBarcodeLookup, digits, exitPrintManyMode, needsPricePost, onStatus, pendingBarcode, priceApiBaseUrl, priceApiToken, printManyMode, resetBarcodeState],
   );
 
   const handlePrint = useCallback(async () => {
     if (printManyMode) {
       exitPrintManyMode();
-    }
-
-    if (isResolvingBarcode) {
-      onStatus('Wait for barcode lookup to finish');
-      return;
     }
 
     if (!digits) {
@@ -289,7 +307,6 @@ export function PriceInputProvider({
     buildPrintMeta,
     digits,
     exitPrintManyMode,
-    isResolvingBarcode,
     onPrint,
     onStatus,
     price,
@@ -316,11 +333,6 @@ export function PriceInputProvider({
       return;
     }
 
-    if (isResolvingBarcode) {
-      onStatus('Wait for barcode lookup to finish');
-      return;
-    }
-
     const meta = buildPrintMeta();
     if (await onPrintMany(price, count, meta)) {
       exitPrintManyMode();
@@ -331,7 +343,6 @@ export function PriceInputProvider({
     buildPrintMeta,
     digits,
     exitPrintManyMode,
-    isResolvingBarcode,
     onPrintMany,
     onStatus,
     price,
@@ -348,7 +359,6 @@ export function PriceInputProvider({
       printManyMode,
       printCount,
       isBusy,
-      isResolvingBarcode,
       appendDigit,
       backspace,
       clear,
@@ -366,7 +376,6 @@ export function PriceInputProvider({
       handlePrint,
       handlePrintMany,
       isBusy,
-      isResolvingBarcode,
       pendingBarcode,
       barcodeApiLookup,
       price,
@@ -396,7 +405,7 @@ export const PriceDisplay = memo(function PriceDisplay() {
     try {
       const value = await scanBarcode();
       if (value) {
-        await resolveBarcodeScan(value);
+        resolveBarcodeScan(value);
       }
     } catch (error) {
       if (!isBarcodeScanCanceled(error)) {
@@ -479,7 +488,6 @@ export const PriceKeypad = memo(function PriceKeypad() {
     printManyMode,
     printCount,
     isBusy,
-    isResolvingBarcode,
     appendDigit,
     backspace,
     clear,
@@ -487,7 +495,7 @@ export const PriceKeypad = memo(function PriceKeypad() {
     handlePrintMany,
   } = usePriceInput();
 
-  const printDisabled = isBusy || isResolvingBarcode;
+  const printDisabled = isBusy;
 
   return (
     <>

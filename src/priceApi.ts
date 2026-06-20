@@ -129,11 +129,13 @@ export async function fetchPriceByBarcode(
   baseUrl: string,
   token: string,
   barcode: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   try {
     const response = await fetch(priceReadEndpoint(baseUrl, barcode), {
       method: 'GET',
       headers: authHeaders(token),
+      signal,
     });
 
     if (response.status === 404) {
@@ -146,6 +148,10 @@ export async function fetchPriceByBarcode(
 
     return readPriceValue(await response.json());
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error;
+    }
+
     if (error instanceof PriceApiError) {
       throw error;
     }
