@@ -5,7 +5,7 @@
 
 Android app for printing price labels to a USB-connected **Zebra ZD410** printer.
 
-![Zebra Price Label app](docs/app-screenshot.png)
+<img src=".owl/baseline/android/home-screen.png" alt="Zebra Price Label app" width="50%" />
 
 ## Features
 
@@ -143,18 +143,13 @@ On the first run, `Cache not found for input keys: Linux-android-ndk-…` is nor
 
 ## Capture a screenshot for the README
 
-With the app open on a connected device:
+Update the Owl baseline (used in the README image above):
 
 ```sh
-adb exec-out screencap -p > docs/app-screenshot.png
+npm run owl:test:android:update
 ```
 
-If multiple devices are connected, pick one explicitly:
-
-```sh
-adb devices
-adb -s <device-id> exec-out screencap -p > docs/app-screenshot.png
-```
+This writes `.owl/baseline/android/home-screen.png`.
 
 ## Project layout
 

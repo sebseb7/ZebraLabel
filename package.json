@@ -11,7 +11,6 @@
     "owl:build:android": "owl build --platform android",
     "owl:test:android": "node scripts/owl-test-android.js",
     "owl:test:android:update": "node scripts/owl-test-android.js --update",
-    "owl:screenshot:readme": "node -e \"require('fs').copyFileSync('.owl/baseline/android/home-screen.png','docs/app-screenshot.png')\"",
     "build:apk": "node scripts/build-apk.js",
     "install:apk": "node scripts/install-apk-all.js",
     "release": "node scripts/release.js",
